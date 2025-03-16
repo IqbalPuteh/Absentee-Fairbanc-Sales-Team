@@ -4,200 +4,177 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
-  Alert,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-import ConfirmationPopup from "./ConfirmationPopup";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { MapPin, Clock, ArrowLeft, CheckCircle } from "lucide-react-native";
+import { ArrowLeft, MapPin, Clock, FileText } from "lucide-react-native";
+import * as Location from "expo-location";
+import ConfirmationPopup from "./ConfirmationPopup";
 
 interface MeetingAttendanceProps {
-  isCheckedIn?: boolean;
   mode?: "checkin" | "checkout";
-  onCheckIn?: (
-    notes: string,
-    location: { latitude: number; longitude: number },
-  ) => void;
-  onCheckOut?: (
-    notes: string,
-    location: { latitude: number; longitude: number },
-  ) => void;
 }
 
-const MeetingAttendance = ({
-  isCheckedIn = false,
-  mode: propMode,
-  onCheckIn = () => {},
-  onCheckOut = () => {},
-}: MeetingAttendanceProps) => {
+const MeetingAttendance = ({ mode: propMode }: MeetingAttendanceProps) => {
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const mode = (propMode || params.mode || "checkin") as "checkin" | "checkout";
+  const params = useLocalSearchParams<{ mode: "checkin" | "checkout" }>();
+  const mode = params.mode || propMode || "checkin";
 
-  // Set initial check-in status based on mode prop
-  const initialCheckedIn = mode === "checkout" || isCheckedIn;
+  const [location, setLocation] = useState<Location.LocationObject | null>(
+    null,
+  );
   const [notes, setNotes] = useState("");
-  const [isCheckedInState, setIsCheckedInState] = useState(initialCheckedIn);
-  const [location, setLocation] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
-  // Simulate getting location
   useEffect(() => {
     const getLocation = async () => {
-      setLoading(true);
-      // Simulate location fetch delay
-      setTimeout(() => {
-        // Mock location data
-        setLocation({
-          latitude: 37.7749,
-          longitude: -122.4194,
-        });
-        setLoading(false);
-      }, 1000);
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+
+        if (status !== "granted") {
+          console.error("Location permission denied");
+          setIsLoading(false);
+          return;
+        }
+
+        const currentLocation = await Location.getCurrentPositionAsync({});
+        setLocation(currentLocation);
+      } catch (error) {
+        console.error("Error getting location:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     getLocation();
   }, []);
 
-  const handleAction = () => {
-    if (!location) {
-      Alert.alert("Error", "Unable to get your location. Please try again.");
+  const handleSubmit = () => {
+    if (notes.trim().length === 0) {
+      alert("Please enter meeting notes or information");
       return;
     }
 
-    setLoading(true);
+    setIsSubmitting(true);
 
-    // Simulate API call
+    // Simulate API call to record attendance
     setTimeout(() => {
-      if (isCheckedInState) {
-        onCheckOut(notes, location);
-      } else {
-        onCheckIn(notes, location);
-      }
-      setLoading(false);
+      setIsSubmitting(false);
       setShowConfirmation(true);
-
-      // Auto navigate back after confirmation
-      setTimeout(() => {
-        setShowConfirmation(false);
-        router.back();
-      }, 2000);
-    }, 1000);
+    }, 1500);
   };
 
   const handleBack = () => {
     router.back();
   };
 
-  if (showConfirmation) {
-    return (
-      <View className="flex-1 bg-white justify-center items-center p-6">
-        <ConfirmationPopup
-          visible={true}
-          message={
-            isCheckedInState
-              ? "Meeting Check-Out Successful"
-              : "Meeting Check-In Successful"
-          }
-          subMessage="Your attendance has been recorded successfully."
-          onDismiss={() => {
-            setShowConfirmation(false);
-            router.back();
-          }}
-        />
-      </View>
-    );
-  }
+  const handleConfirmationDismiss = () => {
+    setShowConfirmation(false);
+    router.push("/");
+  };
 
   return (
-    <View className="flex-1 bg-white">
-      {/* Header */}
-      <View className="bg-blue-600 p-4 flex-row items-center">
-        <TouchableOpacity onPress={handleBack} className="mr-4">
-          <ArrowLeft size={24} color="white" />
-        </TouchableOpacity>
-        <Text className="text-white text-xl font-bold">
-          Meeting/Visit {isCheckedInState ? "Check-Out" : "Check-In"}
-        </Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      className="flex-1"
+    >
+      <View className="flex-1 bg-white">
+        {/* Header */}
+        <View className="bg-green-600 p-4 flex-row items-center">
+          <TouchableOpacity onPress={handleBack} className="mr-4">
+            <ArrowLeft size={24} color="white" />
+          </TouchableOpacity>
+          <Text className="text-white text-xl font-bold">
+            Meeting {mode === "checkin" ? "Check In" : "Check Out"}
+          </Text>
+        </View>
+
+        <ScrollView className="flex-1 p-6">
+          <View className="items-center mb-8">
+            <Text className="text-2xl font-bold text-green-600">
+              Meeting {mode === "checkin" ? "Check In" : "Check Out"}
+            </Text>
+            <Text className="text-gray-500 mt-2 text-center">
+              {mode === "checkin"
+                ? "Record your arrival at the meeting"
+                : "Record your departure from the meeting"}
+            </Text>
+          </View>
+
+          <View className="bg-gray-100 rounded-xl p-6 mb-6">
+            <View className="flex-row items-center mb-4">
+              <Clock size={24} color="#4B5563" />
+              <Text className="text-gray-700 ml-3 text-lg">
+                {new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Text>
+            </View>
+
+            <View className="flex-row items-center">
+              <MapPin size={24} color="#4B5563" />
+              <Text className="text-gray-700 ml-3 text-lg">
+                {isLoading
+                  ? "Getting location..."
+                  : location
+                    ? `Lat: ${location.coords.latitude.toFixed(
+                        4,
+                      )}, Long: ${location.coords.longitude.toFixed(4)}`
+                    : "Location unavailable"}
+              </Text>
+            </View>
+          </View>
+
+          <View className="mb-6">
+            <Text className="text-gray-700 mb-2 font-medium">
+              Meeting Notes / Information
+            </Text>
+            <View className="border border-gray-300 rounded-lg p-3 bg-gray-50">
+              <View className="flex-row items-start">
+                <FileText size={20} color="#4B5563" className="mt-1" />
+                <TextInput
+                  className="flex-1 ml-2 text-base text-gray-800"
+                  placeholder="Enter meeting details, client name, or purpose"
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  value={notes}
+                  onChangeText={setNotes}
+                />
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            className={`${mode === "checkin" ? "bg-green-500" : "bg-red-500"} p-6 rounded-xl items-center justify-center`}
+            onPress={handleSubmit}
+            disabled={isLoading || isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text className="text-white text-xl font-semibold">
+                {mode === "checkin" ? "Check In Now" : "Check Out Now"}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+
+        <ConfirmationPopup
+          visible={showConfirmation}
+          message={`Meeting ${mode === "checkin" ? "Check In" : "Check Out"} Successful`}
+          subMessage={`Your ${mode === "checkin" ? "arrival at" : "departure from"} the meeting has been recorded.`}
+          onDismiss={handleConfirmationDismiss}
+          type="success"
+        />
       </View>
-
-      <ScrollView className="flex-1 p-4">
-        {/* Location Info */}
-        <View className="bg-blue-50 rounded-lg p-4 mb-4">
-          <View className="flex-row items-center mb-2">
-            <MapPin size={20} color="#3b82f6" />
-            <Text className="ml-2 font-bold text-blue-700">
-              Current Location
-            </Text>
-          </View>
-
-          {loading ? (
-            <View className="items-center py-4">
-              <ActivityIndicator size="small" color="#3b82f6" />
-              <Text className="text-blue-600 mt-2">
-                Getting your location...
-              </Text>
-            </View>
-          ) : location ? (
-            <View>
-              <Text className="text-gray-700">
-                Latitude: {location.latitude.toFixed(6)}
-              </Text>
-              <Text className="text-gray-700">
-                Longitude: {location.longitude.toFixed(6)}
-              </Text>
-              <Text className="text-gray-700 mt-2">
-                {/* Mock address */}
-                123 Business Street, San Francisco, CA 94103
-              </Text>
-            </View>
-          ) : (
-            <Text className="text-red-500">Unable to get location</Text>
-          )}
-        </View>
-
-        {/* Time Info */}
-        <View className="bg-blue-50 rounded-lg p-4 mb-4">
-          <View className="flex-row items-center mb-2">
-            <Clock size={20} color="#3b82f6" />
-            <Text className="ml-2 font-bold text-blue-700">Current Time</Text>
-          </View>
-          <Text className="text-gray-700">{new Date().toLocaleString()}</Text>
-        </View>
-
-        {/* Meeting Notes */}
-        <View className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
-          <Text className="font-bold text-gray-700 mb-2">Meeting Notes</Text>
-          <TextInput
-            className="bg-gray-50 p-3 rounded-md text-gray-700 min-h-[100px]"
-            placeholder="Enter meeting details, client name, purpose, etc."
-            multiline
-            value={notes}
-            onChangeText={setNotes}
-          />
-        </View>
-
-        {/* Action Button */}
-        <TouchableOpacity
-          className={`py-4 px-6 rounded-lg ${isCheckedInState ? "bg-red-600" : "bg-green-600"} items-center mb-6`}
-          onPress={handleAction}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text className="text-white font-bold text-lg">
-              {isCheckedInState ? "Check Out" : "Check In"}
-            </Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 

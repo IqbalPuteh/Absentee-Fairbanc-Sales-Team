@@ -4,213 +4,141 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
+  ScrollView,
 } from "react-native";
-import ConfirmationPopup from "./ConfirmationPopup";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { MapPin, Clock, CheckCircle, XCircle } from "lucide-react-native";
+import { ArrowLeft, MapPin, Clock } from "lucide-react-native";
+import * as Location from "expo-location";
+import ConfirmationPopup from "./ConfirmationPopup";
 
 interface OfficeAttendanceProps {
-  isCheckedIn?: boolean;
   mode?: "checkin" | "checkout";
-  onCheckIn?: (location: { latitude: number; longitude: number }) => void;
-  onCheckOut?: (location: { latitude: number; longitude: number }) => void;
 }
 
-const OfficeAttendance = ({
-  isCheckedIn = false,
-  mode: propMode,
-  onCheckIn = () => {},
-  onCheckOut = () => {},
-}: OfficeAttendanceProps) => {
+const OfficeAttendance = ({ mode: propMode }: OfficeAttendanceProps) => {
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const mode = (propMode || params.mode || "checkin") as "checkin" | "checkout";
+  const params = useLocalSearchParams<{ mode: "checkin" | "checkout" }>();
+  const mode = params.mode || propMode || "checkin";
 
-  const [loading, setLoading] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState(
-    mode === "checkout" || isCheckedIn,
+  const [location, setLocation] = useState<Location.LocationObject | null>(
+    null,
   );
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [currentLocation, setCurrentLocation] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [confirmationMessage, setConfirmationMessage] = useState("");
 
   useEffect(() => {
-    // Update time every second
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    const getLocation = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
 
-    return () => clearInterval(timer);
+        if (status !== "granted") {
+          console.error("Location permission denied");
+          setIsLoading(false);
+          return;
+        }
+
+        const currentLocation = await Location.getCurrentPositionAsync({});
+        setLocation(currentLocation);
+      } catch (error) {
+        console.error("Error getting location:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    getLocation();
   }, []);
 
-  const getCurrentLocation = async () => {
-    setLoading(true);
-    try {
-      // Simulate getting location
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      const mockLocation = {
-        latitude: 37.7749,
-        longitude: -122.4194,
-      };
-      setCurrentLocation(mockLocation);
-      return mockLocation;
-    } catch (error) {
-      Alert.alert("Error", "Failed to get your location. Please try again.");
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleSubmit = () => {
+    setIsSubmitting(true);
 
-  const handleCheckIn = async () => {
-    const location = await getCurrentLocation();
-    if (location) {
-      onCheckIn(location);
-      setCurrentStatus(true);
-      setConfirmationMessage("You have successfully checked in!");
+    // Simulate API call to record attendance
+    setTimeout(() => {
+      setIsSubmitting(false);
       setShowConfirmation(true);
-
-      // Auto-dismiss confirmation after 2 seconds
-      setTimeout(() => {
-        setShowConfirmation(false);
-        router.push("/");
-      }, 2000);
-    }
+    }, 1500);
   };
 
-  const handleCheckOut = async () => {
-    const location = await getCurrentLocation();
-    if (location) {
-      onCheckOut(location);
-      setCurrentStatus(false);
-      setConfirmationMessage("You have successfully checked out!");
-      setShowConfirmation(true);
-
-      // Auto-dismiss confirmation after 2 seconds
-      setTimeout(() => {
-        setShowConfirmation(false);
-        router.push("/");
-      }, 2000);
-    }
+  const handleBack = () => {
+    router.back();
   };
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  };
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+  const handleConfirmationDismiss = () => {
+    setShowConfirmation(false);
+    router.push("/");
   };
 
   return (
-    <View className="flex-1 bg-white p-6">
+    <View className="flex-1 bg-white">
       {/* Header */}
-      <View className="items-center mb-8">
-        <Text className="text-2xl font-bold text-blue-600">
-          Office Attendance
-        </Text>
-        <Text className="text-gray-500 mt-2">
-          Record your office attendance
+      <View className="bg-blue-600 p-4 flex-row items-center">
+        <TouchableOpacity onPress={handleBack} className="mr-4">
+          <ArrowLeft size={24} color="white" />
+        </TouchableOpacity>
+        <Text className="text-white text-xl font-bold">
+          Office {mode === "checkin" ? "Check In" : "Check Out"}
         </Text>
       </View>
 
-      {/* Current Time and Date */}
-      <View className="bg-gray-100 rounded-lg p-4 mb-6">
-        <View className="flex-row items-center mb-2">
-          <Clock size={20} color="#4B5563" />
-          <Text className="text-gray-700 ml-2 font-medium">Current Time</Text>
+      <ScrollView className="flex-1 p-6">
+        <View className="items-center mb-8">
+          <Text className="text-2xl font-bold text-blue-600">
+            Office {mode === "checkin" ? "Check In" : "Check Out"}
+          </Text>
+          <Text className="text-gray-500 mt-2 text-center">
+            {mode === "checkin"
+              ? "Record your arrival at the office"
+              : "Record your departure from the office"}
+          </Text>
         </View>
-        <Text className="text-2xl font-bold text-gray-800">
-          {formatTime(currentTime)}
-        </Text>
-        <Text className="text-gray-600 mt-1">{formatDate(currentTime)}</Text>
-      </View>
 
-      {/* Location Information */}
-      <View className="bg-gray-100 rounded-lg p-4 mb-8">
-        <View className="flex-row items-center mb-2">
-          <MapPin size={20} color="#4B5563" />
-          <Text className="text-gray-700 ml-2 font-medium">Location</Text>
-        </View>
-        {currentLocation ? (
-          <View>
-            <Text className="text-gray-800">
-              Latitude: {currentLocation.latitude.toFixed(4)}
-            </Text>
-            <Text className="text-gray-800">
-              Longitude: {currentLocation.longitude.toFixed(4)}
+        <View className="bg-gray-100 rounded-xl p-6 mb-6">
+          <View className="flex-row items-center mb-4">
+            <Clock size={24} color="#4B5563" />
+            <Text className="text-gray-700 ml-3 text-lg">
+              {new Date().toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </Text>
           </View>
-        ) : (
-          <Text className="text-gray-600 italic">
-            Location will be captured when you check in/out
-          </Text>
-        )}
-      </View>
 
-      {/* Status */}
-      <View className="bg-gray-100 rounded-lg p-4 mb-8">
-        <Text className="text-gray-700 font-medium mb-2">Current Status</Text>
-        <View className="flex-row items-center">
-          {currentStatus ? (
-            <>
-              <CheckCircle size={24} color="#10B981" />
-              <Text className="text-green-600 ml-2 font-bold">Checked In</Text>
-            </>
-          ) : (
-            <>
-              <XCircle size={24} color="#EF4444" />
-              <Text className="text-red-600 ml-2 font-bold">Checked Out</Text>
-            </>
-          )}
+          <View className="flex-row items-center">
+            <MapPin size={24} color="#4B5563" />
+            <Text className="text-gray-700 ml-3 text-lg">
+              {isLoading
+                ? "Getting location..."
+                : location
+                  ? `Lat: ${location.coords.latitude.toFixed(
+                      4,
+                    )}, Long: ${location.coords.longitude.toFixed(4)}`
+                  : "Location unavailable"}
+            </Text>
+          </View>
         </View>
-      </View>
 
-      {/* Action Button */}
-      <TouchableOpacity
-        className={`py-4 rounded-lg items-center ${currentStatus ? "bg-red-500" : "bg-green-500"}`}
-        onPress={currentStatus ? handleCheckOut : handleCheckIn}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text className="text-white font-bold text-lg">
-            {currentStatus ? "Check Out" : "Check In"}
-          </Text>
-        )}
-      </TouchableOpacity>
+        <TouchableOpacity
+          className={`${mode === "checkin" ? "bg-green-500" : "bg-red-500"} p-6 rounded-xl items-center justify-center`}
+          onPress={handleSubmit}
+          disabled={isLoading || isSubmitting}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text className="text-white text-xl font-semibold">
+              {mode === "checkin" ? "Check In Now" : "Check Out Now"}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
 
-      {/* Back Button */}
-      <TouchableOpacity
-        className="mt-4 py-3 rounded-lg items-center bg-gray-200"
-        onPress={() => router.push("/")}
-      >
-        <Text className="text-gray-700 font-medium">Back to Main Menu</Text>
-      </TouchableOpacity>
-
-      {/* Confirmation Popup */}
       <ConfirmationPopup
         visible={showConfirmation}
-        message={confirmationMessage}
-        onDismiss={() => {
-          setShowConfirmation(false);
-          router.push("/");
-        }}
+        message={`Office ${mode === "checkin" ? "Check In" : "Check Out"} Successful`}
+        subMessage={`Your ${mode === "checkin" ? "arrival at" : "departure from"} the office has been recorded.`}
+        onDismiss={handleConfirmationDismiss}
+        type="success"
       />
     </View>
   );

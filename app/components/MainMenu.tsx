@@ -1,5 +1,12 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  BackHandler,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { Clock, Users, LogOut } from "lucide-react-native";
 
@@ -11,19 +18,22 @@ const MainMenu = ({ userName = "User" }: MainMenuProps) => {
   const router = useRouter();
 
   const handleOfficeAttendance = () => {
-    // Navigate to office bridging screen
     router.push("/components/OfficeBridgingScreen");
   };
 
   const handleMeetingAttendance = () => {
-    // Navigate to meeting bridging screen
     router.push("/components/MeetingBridgingScreen");
   };
 
   const handleExit = () => {
     // Exit the application
-    // For web or development, we'll just log this action
-    console.log("Exit application");
+    if (Platform.OS === "web") {
+      // For web, we'll just log this action
+      console.log("Exit application");
+    } else {
+      // For native platforms (Android/iOS)
+      BackHandler.exitApp();
+    }
   };
 
   return (
